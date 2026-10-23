@@ -1,0 +1,13 @@
+@media (min-height: 900px) {
+  .main-column { padding-top: 20px; padding-bottom: 22px; }
+  .stepper { margin-bottom: 16px; }
+  .success-banner { padding-block: 11px; margin-bottom: 14px; }
+  .section-block { margin-bottom: 14px; }
+  .file-row { min-height: 38px; }
+  .diff-pane pre { min-height: 205px; padding-block: 11px; }
+  .release-form { gap: 10px 16px; }
+  .release-form textarea { height: 60px; }
+  .release-form input,
+  .release-form textarea { margin-top: 6px; padding-block: 8px; }
+  .primary-action { height: 42px; }
+}
