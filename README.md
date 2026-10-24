@@ -46,6 +46,8 @@ npm run build
 
 ## 部署到自己的账户
 
+完整的 Cloudflare 操作清单、验收与常见问题见 [自托管部署教程](docs/deployment.md)。下面是顺序摘要。
+
 1. 从本仓库的稳定 Release 创建自己的**私有部署仓**，不要把个人部署配置提交回本公开仓。安装 Node.js 后在部署仓运行 `npm ci`、`npm test` 和 `npm run build`。
 2. 在自己的 Cloudflare 账户创建 D1；在私有部署仓的 `wrangler.jsonc` 中填写自己的 Worker 名称、D1 名称及 ID（绑定名保持 `DB`），以及唯一允许写入的博客**源码仓库** `PUBLISH_ALLOWED_REPOSITORY`。公开仓的该字段留空，默认拒绝写入。使用 Wrangler 部署前先核对目标 Cloudflare 账户与 Worker 名称；Access 未配置完成前，Worker 会返回 503。
 3. 为 Worker 设置随机 32 字节 Base64 `CONFIG_ENCRYPTION_KEY` Secret；不要把值提交到仓库。单独安全备份该密钥，否则加密配置将无法恢复。
