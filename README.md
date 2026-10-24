@@ -1,6 +1,6 @@
-# Blog Studio · 博客管理后台
+# Blog Studio
 
-面向 Hexo / Hugo 博客的写作与发布管理后台。当前仍是早期版本，**不是完整发布链已验收的声明**。未配置 Cloudflare Access 校验时，页面和接口都会拒绝访问。
+面向 Hexo / Hugo 博客的自托管写作与发布后台。代码以 MIT 许可开放；每位使用者在自己的 GitHub 和 Cloudflare 账户中独立部署，博客内容、配置和密钥不进入本仓库。当前仍是早期版本，**不是完整发布链已验收的声明**。未配置 Cloudflare Access 校验时，页面和接口都会拒绝访问。
 
 ## 当前具备的功能
 
@@ -44,14 +44,23 @@ npm run build
 - `worker/`：受 Cloudflare Access JWT 校验保护的页面和 GitHub 连接接口；`worker/index.js` 保留独立静态入口。
 - `tests/`：文章、文件边界及静态资源行为测试。
 
-## 每位用户的部署与连接顺序
+## 部署到自己的账户
 
-1. 复制本仓库到自己的独立部署仓，创建自己的 D1，并在私有部署仓的 `wrangler.jsonc` 中填写自己的 Worker 名称、D1 名称及 ID，以及唯一允许写入的博客源码仓库 `PUBLISH_ALLOWED_REPOSITORY`。公开仓的该字段留空，默认拒绝写入。先在自己的 Cloudflare 账户部署 Worker；在配置 Access 前地址只会返回 503。
-2. 为 Worker 设置随机 32 字节 Base64 `CONFIG_ENCRYPTION_KEY` Secret；不要把值提交到仓库。备份该密钥，否则加密配置将无法恢复。
-3. 在 Cloudflare Access 创建仅本人可登录的应用并保护后台域名；为 Worker 配置 `ACCESS_TEAM_DOMAIN`（例如 `https://team.cloudflareaccess.com`）和该应用的 `ACCESS_AUD`。Worker 会验证 JWT 签名、签发者、有效期和受众。访问保护未配置时返回 503。
-4. 在自己的 GitHub 账户创建 GitHub App，授予博客**源码仓库**最小 Contents 读写及 Pull requests 读写权限，安装时仅选择要管理的仓库。生成并下载 App 的 PEM 私钥。
-5. 登录后台「GitHub 设置」，填写 App ID、安装 ID 和 PEM。后台先获取短期安装令牌验证权限，然后将 PEM 用 AES-GCM 加密保存在 D1；浏览器不持久化、不回显私钥。选择授权仓库并确认识别结果。
+1. 从本仓库的稳定 Release 创建自己的**私有部署仓**，不要把个人部署配置提交回本公开仓。安装 Node.js 后在部署仓运行 `npm ci`、`npm test` 和 `npm run build`。
+2. 在自己的 Cloudflare 账户创建 D1；在私有部署仓的 `wrangler.jsonc` 中填写自己的 Worker 名称、D1 名称及 ID（绑定名保持 `DB`），以及唯一允许写入的博客**源码仓库** `PUBLISH_ALLOWED_REPOSITORY`。公开仓的该字段留空，默认拒绝写入。使用 Wrangler 部署前先核对目标 Cloudflare 账户与 Worker 名称；Access 未配置完成前，Worker 会返回 503。
+3. 为 Worker 设置随机 32 字节 Base64 `CONFIG_ENCRYPTION_KEY` Secret；不要把值提交到仓库。单独安全备份该密钥，否则加密配置将无法恢复。
+4. 在 Cloudflare Access 创建仅本人可登录的应用并保护后台域名；为 Worker 配置 `ACCESS_TEAM_DOMAIN`（例如 `https://team.cloudflareaccess.com`）和该应用的 `ACCESS_AUD`。Worker 会验证 JWT 签名、签发者、有效期和受众。访问保护未配置时返回 503。
+5. 在自己的 GitHub 账户创建 GitHub App，授予博客**源码仓库**最小 Contents 读写权限，安装时仅选择要管理的仓库。生成并下载 App 的 PEM 私钥。
+6. 登录后台「GitHub 设置」，填写 App ID、安装 ID 和 PEM。后台先获取短期安装令牌验证权限，然后将 PEM 用 AES-GCM 加密保存在 D1；浏览器不持久化、不回显私钥。选择授权仓库并确认识别结果。若使用 R2 图床，再到「图床设置」单独连接自己的测试桶并验证公开图片地址。
 
 GitHub App 的 OAuth Client Secret 不是 PEM 私钥，这套安装令牌流程不需要填写 Client Secret。私钥不要提交到后台代码仓库或博客源码仓库。开发仓库只需授权 App；生产仓库不需要授权后台写入。
 
 后台应独立于博客前台：GitHub 保存后台代码，Cloudflare 承载受保护的管理页面与 API；博客构建仍由各自仓库的流程负责。不要将私有部署配置、密钥或站点数据回传到这个公开仓。真实授权和权限边界完成前，不接入生产仓写权限。
+
+## 更新与版本
+
+公开仓的 GitHub Release 是通用代码版本。私有部署仓可以手动合并 Release 的代码，也可以自行建立只同步应用代码的 GitHub Actions；始终保留自己的 `wrangler.jsonc`、Secrets、Access 设置和写入白名单。**Fork 本身不会自动接收上游更新**。更新后应先运行测试和构建，再检查私有配置与线上回滚路径。GitHub 代码同步与 Cloudflare 自动部署是两条独立链路；未配置后者时仍需自行部署 Worker。
+
+## 项目状态与参与
+
+功能清单和未完成边界见上文。问题或改进建议可通过本仓库 Issues 提交；安全问题请勿在公开 Issue 中附带令牌、PEM、配置备份或博客私有内容。代码贡献遵循 [MIT 许可](LICENSE)，提交前请运行 `npm test` 与 `npm run build`。
