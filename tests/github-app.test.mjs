@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { generateKeyPairSync, verify } from "node:crypto";
 import test from "node:test";
-import { createAppJwt, deleteRepositoryArticle, installationToken, inspectInstalledRepository, listArticleHistory, listInstalledRepositories, listRepositoryArticles, readArticleRevision, readRepositoryArticle, updateRepositoryArticle } from "../worker/github-app.js";
+import { createAppJwt, deleteRepositoryArticle, installationToken, inspectInstalledRepository, listArticleHistory, listInstalledRepositories, listRepositoryArticles, readArticleRevision, readRepositoryArticle, updateRepositoryArticle, updateRepositoryArticles } from "../worker/github-app.js";
 
 const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const config = {
@@ -135,6 +135,31 @@ test("updates only the matching SHA and preserves unknown front matter in raw Ma
   assert.equal(written.sha, sha);
   assert.equal(Buffer.from(written.content, "base64").toString(), changed);
   assert.match(changed, /custom_theme_flag: true/);
+});
+
+test("updates multiple pin values in one commit and rejects stale article SHAs", async () => {
+  const bound = { ...config, repository: "owner/dev-blog", site: { articleDir: "source/_posts", defaultBranch: "main" } };
+  const oldSha = "a".repeat(40), head = "b".repeat(40), treeSha = "c".repeat(40), nextTree = "d".repeat(40), nextCommit = "e".repeat(40);
+  const updates = [{ path: "source/_posts/one.md", sha: oldSha, content: "---\ntop: 0\n---\nOne" }, { path: "source/_posts/two.md", sha: oldSha, content: "---\ntop: 5\n---\nTwo" }];
+  const writes = [];
+  const request = async (url, options = {}) => {
+    if (url.endsWith("/access_tokens")) return Response.json({ token: "temporary-token" });
+    if (url.endsWith("/git/ref/heads/main")) return Response.json({ object: { sha: head } });
+    if (url.endsWith(`/git/commits/${head}`)) return Response.json({ tree: { sha: treeSha } });
+    if (url.includes(`/git/trees/${treeSha}`)) return Response.json({ tree: updates.map(item => ({ path: item.path, sha: oldSha })) });
+    writes.push({ url, body: JSON.parse(options.body) });
+    if (url.endsWith("/git/trees")) return Response.json({ sha: nextTree });
+    if (url.endsWith("/git/commits")) return Response.json({ sha: nextCommit });
+    return Response.json({ object: { sha: nextCommit } });
+  };
+  assert.deepEqual(await updateRepositoryArticles(bound, updates, request), { commit: nextCommit, updated: 2 });
+  assert.equal(writes.length, 3);
+  assert.deepEqual(writes[0].body.tree.map(item => item.content), updates.map(item => item.content));
+  assert.deepEqual(writes[1].body.parents, [head]);
+  assert.deepEqual(writes[2].body, { sha: nextCommit, force: false });
+  writes.length = 0;
+  await assert.rejects(() => updateRepositoryArticles(bound, [{ ...updates[0], sha: "f".repeat(40) }], request), /已更新/);
+  assert.equal(writes.length, 0);
 });
 
 test("deletes only a current article in the bound directory with matching SHA", async () => {
