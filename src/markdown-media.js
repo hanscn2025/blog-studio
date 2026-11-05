@@ -14,6 +14,12 @@ export function resolveDraftImage(src=""){
   return id?draftImages.get(id)||src:src;
 }
 
+export function articleImageSources(markdown=""){
+  const sources=[...markdown.matchAll(/!\[[^\]]*\]\((?:<([^>]+)>|([^\s)]+))(?:\s+["'][^"']*["'])?\)/g)].map(match=>match[1]||match[2]);
+  sources.push(...[...markdown.matchAll(/<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi)].map(match=>match[1]));
+  return [...new Set(sources.filter(src=>/^(?:https?:\/\/|asset:\/\/)/i.test(src)))];
+}
+
 export function parseMarkdownImage(line){
   const match=line.trim().match(/^!\[([^\]]*)\]\((https?:\/\/[^\s)]+|[^\s)]+)\)$/);
   if(!match)return null;

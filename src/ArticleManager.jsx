@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { FileText, MagnifyingGlass } from "@phosphor-icons/react";
-import { sortArticlesForDisplay } from "./article-standard.js";
+import { FileText, MagnifyingGlass, PencilSimple, Trash } from "@phosphor-icons/react";
+import { planPinnedArticles, rankedPinnedArticles, sortArticlesForDisplay } from "./article-standard.js";
 import { PENDING_KEY, pendingKey, savePending } from "./draft-store.js";
 import { demoArticles, demoRepository } from "./demo-articles.js";
 import { mergeRepositoryArticle, parseRepositoryArticle } from "./repository-article.js";
@@ -40,7 +40,7 @@ export function ArticleManager({ siteProfile, renderEditor, targetPath, clearTar
   const [error, setError] = useState("");
   const [reload, setReload] = useState(0);
   const [viewing, setViewing] = useState(null);
-  const usesCategories = siteProfile?.usesCategories !== false || remoteArticles.some(item => item.category);
+  const [changing, setChanging] = useState("");
 
   useEffect(() => {
     if (demo) return;
@@ -60,7 +60,62 @@ export function ArticleManager({ siteProfile, renderEditor, targetPath, clearTar
   }, [pending]);
 
   const hasPending = item => !!pending[pendingKey(repository, item.file)];
-  const rows = sortArticlesForDisplay(remoteArticles.filter(item => (filter === "全部" || (filter === "待提交更新" ? hasPending(item) : Number(item.top) > 0)) && `${item.title} ${item.file}`.toLowerCase().includes(query.toLowerCase())), filter === "置顶");
+  const rows = sortArticlesForDisplay(remoteArticles.filter(item => (filter === "全部" || (filter === "待提交更新" ? hasPending(item) : filter === "已下架" ? item.published === false : item.published !== false && Number(item.top) > 0)) && `${item.title} ${item.file}`.toLowerCase().includes(query.toLowerCase())), filter === "置顶");
+  const pinnedRanks=new Map(rankedPinnedArticles(remoteArticles).map((article,index)=>[article.file,index+1]));
+
+  async function updateTopPlan(plan){
+    if(demo){
+      const tops=new Map(plan.updates.map(update=>[update.file,update.top]));
+      setRemoteArticles(current=>current.map(article=>tops.has(article.file)?{...article,top:tops.get(article.file)}:article));
+      return;
+    }
+    for(const update of plan.updates){
+      const source=(await api(`/api/github/article?path=${encodeURIComponent(update.file)}`)).article;
+      const before=parseRepositoryArticle(source.content,update.file);
+      if(!before)throw new Error(`文章属性无法识别：${update.file}`);
+      const content=mergeRepositoryArticle(source.content,before,{...before,top:update.top});
+      const response=await fetch("/api/github/update",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({path:update.file,sha:source.sha,content,message:`Update pinned articles: ${update.file}`})});
+      const result=await response.json();
+      if(!response.ok)throw new Error(result.error||`置顶顺序更新失败：${update.file}`);
+    }
+  }
+
+  async function changeVisibility(item, action) {
+    const unpublish = action === "published" && item.published !== false;
+    if (hasPending(item)) { setError("这篇文章有本机待提交更新，请先提交或丢弃后再调整发布状态"); return; }
+    if (unpublish && !window.confirm(`下架「${item.title}」？提交到仓库后还需等待博客重新构建，已分享的旧页面可能仍被缓存。`)) return;
+    setChanging(item.file); setError("");
+    try {
+      if(action==="top"){
+        let plan=planPinnedArticles(remoteArticles,item.file);
+        if(plan.needsReplacement){
+          const choices=plan.pinned.map((article,index)=>`${index+1}. ${article.title}`).join("\n");
+          const selected=window.prompt(`最多置顶 5 篇。请输入要替换的序号：\n${choices}`);
+          if(selected===null)return;
+          const index=Number(selected)-1;
+          if(!Number.isInteger(index)||index<0||index>=plan.pinned.length)throw new Error("请输入 1–5 之间的有效序号");
+          plan=planPinnedArticles(remoteArticles,item.file,plan.pinned[index].file);
+        }
+        await updateTopPlan(plan);
+        if(!demo)setReload(value=>value+1);
+        return;
+      }
+      if (demo) {
+        setRemoteArticles(current => current.map(article => article.file === item.file ? { ...article, [action]: !unpublish, ...(unpublish ? { top: 0 } : {}) } : article));
+        return;
+      }
+      const source = (await api(`/api/github/article?path=${encodeURIComponent(item.file)}`)).article;
+      const before = parseRepositoryArticle(source.content, item.file);
+      if (!before) throw new Error("文章属性无法识别，不能安全修改");
+      const after = { ...before, [action]: before.published === false, ...(unpublish ? { top: 0 } : {}) };
+      const content = mergeRepositoryArticle(source.content, before, after);
+      const response = await fetch("/api/github/update", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: item.file, sha: source.sha, content }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "更新失败");
+      setReload(value => value + 1);
+    } catch (reason) { setError(reason.message); }
+    finally { setChanging(""); }
+  }
 
   async function open(item, edit = false) {
     setViewing({ file: item.file, loading: true });
@@ -117,7 +172,7 @@ export function ArticleManager({ siteProfile, renderEditor, targetPath, clearTar
 
   async function remove(item) {
     const fileName = item.file.split("/").at(-1);
-    if (window.prompt(`删除文章 ${item.file}？请输入文件名 ${fileName} 确认：`) !== fileName) return;
+    if (window.prompt(`删除文章 ${item.file} 及本机待提交更新？图床图片可能被其他文章或站外页面引用，无法确认独占时会保留。请输入文件名 ${fileName} 确认：`) !== fileName) return;
     try {
       if (!demo) {
         const response = await fetch("/api/github/delete", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: item.file, sha: item.sha }) });
@@ -151,7 +206,18 @@ export function ArticleManager({ siteProfile, renderEditor, targetPath, clearTar
   return <section className="article-manager"><header><div><h1>文章管理</h1><p>{loading ? "正在读取 GitHub 仓库…" : demo ? "本地演示仓库 · 可试用编辑、保存待提交更新；不会修改 GitHub" : `仓库 ${repository || "未连接"} · ${remoteArticles.length} 篇文章；提交不等于已上线`}</p></div><div className="article-header-actions"><button className="batch-toggle" disabled={demo || loading} onClick={() => { setLoading(true); setReload(value => value + 1); }}>刷新仓库</button></div></header>
     {demo && <p className="demo-banner">本地演示数据：这三篇不是测试仓文章。可编辑并查看“更新未提交”，真实提交已禁用。</p>}
     {error && <p className="demo-banner" role="alert">{error}</p>}
-    <div className="article-controls"><div className="article-search"><MagnifyingGlass/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索文件名或文章路径"/></div><nav>{["全部", "待提交更新", "置顶"].map(value => <button key={value} className={filter === value ? "active" : ""} onClick={() => setFilter(value)}>{value === "待提交更新" ? `${value} ${remoteArticles.filter(hasPending).length}` : value}</button>)}</nav></div>
-    <div className={`article-table ${usesCategories ? "" : "no-categories"}`}><div className="article-table-head"><span>文章</span>{usesCategories && <span>主分类</span>}<span>导航位置</span><span>状态</span><span>文章日期</span><span>操作</span></div>{rows.map(item => <div className="article-row" key={item.file}><button className="article-name article-open" onClick={() => open(item)}><FileText/><span><strong>{item.title}</strong><small>{item.file}</small></span></button>{usesCategories && <span>{item.category || "—"}</span>}<span className="article-channels">{(item.channels || []).join(" · ") || "—"}</span><span><em className={hasPending(item) ? "pending-status" : ""}>{hasPending(item) ? "更新未提交" : demo ? "演示" : "已提交仓库"}</em></span><span>{item.date || "—"}</span><span className="article-row-actions"><button onClick={() => open(item, true)}>编辑</button><button className="danger" onClick={() => remove(item)}>删除</button></span></div>)}{rows.length === 0 && <div className="article-empty">{loading ? "正在读取…" : "没有符合条件的仓库文章"}</div>}</div>
+    <div className="article-controls"><div className="article-search"><MagnifyingGlass/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索文件名或文章路径"/></div><nav>{["全部", "待提交更新", "置顶", "已下架"].map(value => <button key={value} className={filter === value ? "active" : ""} onClick={() => setFilter(value)}>{value === "待提交更新" ? `${value} ${remoteArticles.filter(hasPending).length}` : value}</button>)}</nav></div>
+    <div className="article-table manager-table">
+      <div className="manager-list-heading"><strong>{filter === "全部" ? "全部文章" : filter}</strong><span>{rows.length} 篇</span></div>
+      {rows.map(item => <div className="article-row" key={item.file}>
+        <button className="article-name article-open" title={item.file} onClick={() => open(item)}><FileText/><span><strong>{item.title}</strong><small>{item.category || "未分类"} · {item.date || "日期未设置"}{hasPending(item) ? " · 更新未提交" : ""}</small></span></button>
+        <div className="manager-publish">
+          <select className={`manager-status ${item.published === false ? "is-hidden" : ""}`} aria-label={`「${item.title}」展示状态`} value={item.published === false ? "hidden" : "visible"} disabled={changing === item.file || hasPending(item)} onChange={() => changeVisibility(item, "published")}><option value="visible">展示</option><option value="hidden">已下架</option></select>
+          <label className="manager-pin" title={hasPending(item) ? "请先处理待提交更新" : item.published === false ? "下架文章不能置顶" : pinnedRanks.has(item.file) ? `置顶第 ${pinnedRanks.get(item.file)} 位` : "设为置顶第 1 位"}><input type="checkbox" aria-label={`${item.title} 置顶`} checked={pinnedRanks.has(item.file)} disabled={changing === item.file || hasPending(item) || item.published === false} onChange={() => changeVisibility(item, "top")}/><span>{pinnedRanks.has(item.file)?`第 ${pinnedRanks.get(item.file)} 位`:"置顶"}</span></label>
+        </div>
+        <div className="article-row-actions manager-actions"><button onClick={() => open(item, true)}><PencilSimple/>编辑</button><button className="danger" onClick={() => remove(item)}><Trash/>删除</button></div>
+      </div>)}
+      {rows.length === 0 && <div className="article-empty">{loading ? "正在读取…" : "没有符合条件的仓库文章"}</div>}
+    </div>
   </section>;
 }

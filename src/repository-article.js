@@ -48,6 +48,7 @@ export function parseRepositoryArticle(raw, file) {
     tags: fieldList(source.entries, "tags").join(", "),
     channels: fieldList(source.entries, "nav_channels"),
     top: Number(value("top")) || 0,
+    published: value("published").toLowerCase() !== "false",
     status: "已提交 GitHub", remote: true, file, content: source.body,
   };
 }
@@ -74,6 +75,11 @@ export function mergeRepositoryArticle(raw, before, after) {
   set("tags", String(after.tags || "").split(",").map(item => item.trim()).filter(Boolean), String(before.tags || "").split(",").map(item => item.trim()).filter(Boolean), true);
   set("nav_channels", after.channels || [], before.channels || [], true);
   set("top", Number(after.top) || 0, Number(before.top) || 0);
+  if (after.published !== before.published) {
+    const index = entries.findIndex(entry => entry.key === "published");
+    const lines = [`published: ${after.published !== false}`];
+    if (index < 0) entries.push({ key: "published", lines }); else entries[index] = { key: "published", lines };
+  }
   const meta = entries.map(entry => entry.lines.join(source.eol)).join(source.eol);
   return `${source.match[1]}${meta}${source.match[3]}${after.content === before.content ? source.body : after.content}`;
 }
