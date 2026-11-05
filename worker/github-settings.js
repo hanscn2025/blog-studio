@@ -1,4 +1,4 @@
-import { createRepositoryArticle, deleteRepositoryArticle, inspectInstalledRepository, installationToken, listArticleHistory, listInstalledRepositories, listRepositoryArticles, readArticleRevision, readRepositoryArticle, updateRepositoryArticle } from "./github-app.js";
+import { createRepositoryArticle, deleteRepositoryArticle, inspectInstalledRepository, installationToken, listArticleHistory, listInstalledRepositories, listRepositoryArticles, readArticleRevision, readRepositoryArticle, updateRepositoryArticle, updateRepositoryArticles } from "./github-app.js";
 import { readRepositoryNavigation } from "./navigation.js";
 import { serializeArticle, validateArticle } from "../src/article-standard.js";
 
@@ -102,6 +102,12 @@ export async function githubSettingsApi(request, env, requestGitHub = fetch) {
       if (!config.site) return json({ error: "请重新识别并绑定博客源码仓库" }, 409);
       const input = await inputJson(request, 1_200_000);
       return json({ updated: await updateRepositoryArticle(config, input.path, input.sha, input.content, input.message, requestGitHub) });
+    }
+    if (url.pathname === "/api/github/update-pins" && request.method === "POST") {
+      if (!env.PUBLISH_ALLOWED_REPOSITORY || config.repository !== env.PUBLISH_ALLOWED_REPOSITORY) return json({ error: "当前后台不允许向该仓库提交" }, 403);
+      if (!config.site) return json({ error: "请重新识别并绑定博客源码仓库" }, 409);
+      const input = await inputJson(request, 8_000_000);
+      return json({ updated: await updateRepositoryArticles(config, input.updates, requestGitHub) });
     }
     if (url.pathname === "/api/github/delete" && request.method === "POST") {
       if (!env.PUBLISH_ALLOWED_REPOSITORY || config.repository !== env.PUBLISH_ALLOWED_REPOSITORY) return json({ error: "当前后台不允许删除该仓库文章" }, 403);

@@ -202,6 +202,31 @@ export async function updateRepositoryArticle(config, path, sha, content, messag
   return { repository, branch, path, sha: result.content?.sha || "", commit: result.commit?.sha || "" };
 }
 
+export async function updateRepositoryArticles(config, updates, request = fetch) {
+  const { repository, articleDir, branch } = source(config);
+  if (!Array.isArray(updates) || !updates.length || updates.length > 40) throw new Error("置顶更新数量无效");
+  const paths = new Set();
+  for (const { path, sha, content } of updates) {
+    if (typeof path !== "string" || !path.startsWith(`${articleDir}/`) || path.split("/").some(part => !part || part === "." || part === "..") || !/\.md$/i.test(path) || paths.has(path)) throw new Error("文章路径无效或重复");
+    if (!/^[0-9a-f]{40}$/i.test(sha || "") || typeof content !== "string" || !/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/.test(content) || Buffer.byteLength(content) > 1_000_000) throw new Error("文章版本或内容无效");
+    paths.add(path);
+  }
+  const token = await installationToken(config, request);
+  const ref = await githubJson(`/repos/${repository}/git/ref/heads/${encodeURIComponent(branch)}`, token, {}, request);
+  const head = ref.object?.sha;
+  if (!/^[0-9a-f]{40}$/i.test(head || "")) throw new Error("无法确认仓库当前版本");
+  const commit = await githubJson(`/repos/${repository}/git/commits/${head}`, token, {}, request);
+  const tree = await githubJson(`/repos/${repository}/git/trees/${commit.tree.sha}?recursive=1`, token, {}, request);
+  if (tree.truncated) throw new Error("仓库文件树不完整，已停止更新");
+  for (const update of updates) {
+    if (tree.tree.find(item => item.path === update.path)?.sha !== update.sha) throw new Error("仓库文章已更新，请刷新后重试，未覆盖新版本");
+  }
+  const nextTree = await githubJson(`/repos/${repository}/git/trees`, token, { method: "POST", body: JSON.stringify({ base_tree: commit.tree.sha, tree: updates.map(({ path, content }) => ({ path, mode: "100644", type: "blob", content })) }) }, request);
+  const nextCommit = await githubJson(`/repos/${repository}/git/commits`, token, { method: "POST", body: JSON.stringify({ message: "Update pinned articles", tree: nextTree.sha, parents: [head] }) }, request);
+  await githubJson(`/repos/${repository}/git/refs/heads/${encodeURIComponent(branch)}`, token, { method: "PATCH", body: JSON.stringify({ sha: nextCommit.sha, force: false }) }, request);
+  return { commit: nextCommit.sha, updated: updates.length };
+}
+
 export async function deleteRepositoryArticle(config, path, sha, request = fetch) {
   const { repository, branch } = source(config);
   if (!/^[0-9a-f]{40}$/i.test(sha || "")) throw new Error("文章版本 SHA 无效");

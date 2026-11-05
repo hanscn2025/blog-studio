@@ -64,20 +64,23 @@ export function ArticleManager({ siteProfile, renderEditor, targetPath, clearTar
   const pinnedRanks=new Map(rankedPinnedArticles(remoteArticles).map((article,index)=>[article.file,index+1]));
 
   async function updateTopPlan(plan){
+    const tops=new Map(plan.updates.map(update=>[update.file,update.top]));
     if(demo){
-      const tops=new Map(plan.updates.map(update=>[update.file,update.top]));
       setRemoteArticles(current=>current.map(article=>tops.has(article.file)?{...article,top:tops.get(article.file)}:article));
       return;
     }
+    const updates=[];
     for(const update of plan.updates){
       const source=(await api(`/api/github/article?path=${encodeURIComponent(update.file)}`)).article;
       const before=parseRepositoryArticle(source.content,update.file);
       if(!before)throw new Error(`文章属性无法识别：${update.file}`);
       const content=mergeRepositoryArticle(source.content,before,{...before,top:update.top});
-      const response=await fetch("/api/github/update",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({path:update.file,sha:source.sha,content,message:`Update pinned articles: ${update.file}`})});
-      const result=await response.json();
-      if(!response.ok)throw new Error(result.error||`置顶顺序更新失败：${update.file}`);
+      updates.push({path:update.file,sha:source.sha,content});
     }
+    const response=await fetch("/api/github/update-pins",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({updates})});
+    const result=await response.json();
+    if(!response.ok)throw new Error(result.error||"置顶顺序更新失败");
+    setRemoteArticles(current=>current.map(article=>tops.has(article.file)?{...article,top:tops.get(article.file)}:article));
   }
 
   async function changeVisibility(item, action) {
@@ -113,7 +116,7 @@ export function ArticleManager({ siteProfile, renderEditor, targetPath, clearTar
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "更新失败");
       setReload(value => value + 1);
-    } catch (reason) { setError(reason.message); }
+    } catch (reason) { setError(reason.message); if(action==="top"&&!demo)setReload(value=>value+1); }
     finally { setChanging(""); }
   }
 
@@ -213,7 +216,7 @@ export function ArticleManager({ siteProfile, renderEditor, targetPath, clearTar
         <button className="article-name article-open" title={item.file} onClick={() => open(item)}><FileText/><span><strong>{item.title}</strong><small>{item.category || "未分类"} · {item.date || "日期未设置"}{hasPending(item) ? " · 更新未提交" : ""}</small></span></button>
         <div className="manager-publish">
           <select className={`manager-status ${item.published === false ? "is-hidden" : ""}`} aria-label={`「${item.title}」展示状态`} value={item.published === false ? "hidden" : "visible"} disabled={changing === item.file || hasPending(item)} onChange={() => changeVisibility(item, "published")}><option value="visible">展示</option><option value="hidden">已下架</option></select>
-          <label className="manager-pin" title={hasPending(item) ? "请先处理待提交更新" : item.published === false ? "下架文章不能置顶" : pinnedRanks.has(item.file) ? `置顶第 ${pinnedRanks.get(item.file)} 位` : "设为置顶第 1 位"}><input type="checkbox" aria-label={`${item.title} 置顶`} checked={pinnedRanks.has(item.file)} disabled={changing === item.file || hasPending(item) || item.published === false} onChange={() => changeVisibility(item, "top")}/><span>{pinnedRanks.has(item.file)?`第 ${pinnedRanks.get(item.file)} 位`:"置顶"}</span></label>
+          <label className="manager-pin" title={hasPending(item) ? "请先处理待提交更新" : item.published === false ? "下架文章不能置顶" : pinnedRanks.has(item.file) ? `置顶第 ${pinnedRanks.get(item.file)} 位` : "设为置顶第 1 位"}><input type="checkbox" aria-label={`${item.title} 置顶`} checked={pinnedRanks.has(item.file)} disabled={!!changing || hasPending(item) || item.published === false} onChange={() => changeVisibility(item, "top")}/><span>{pinnedRanks.has(item.file)?`第 ${pinnedRanks.get(item.file)} 位`:"置顶"}</span></label>
         </div>
         <div className="article-row-actions manager-actions"><button onClick={() => open(item, true)}><PencilSimple/>编辑</button><button className="danger" onClick={() => remove(item)}><Trash/>删除</button></div>
       </div>)}
