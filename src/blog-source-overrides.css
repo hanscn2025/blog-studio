@@ -37,3 +37,24 @@
   .draft-table.article-table .article-table-head,.draft-table.article-table .article-row{grid-template-columns:minmax(0,1fr) 150px}
   .article-diff{grid-template-columns:1fr}
 }
+
+.manager-table{max-width:1180px;margin:0 auto;border:1px solid #e8e8e8;border-radius:8px;overflow:hidden}
+.manager-list-heading{display:flex;align-items:center;gap:9px;height:44px;padding:0 18px;border-bottom:1px solid #e8e8e8;background:#fafafa;color:#333;font-size:13px}
+.manager-list-heading span{color:#999;font-size:12px}
+.article-table.manager-table .article-row{display:grid;grid-template-columns:minmax(0,1fr) 210px 150px;align-items:center;gap:24px;min-height:76px;padding:12px 18px;border-bottom:1px solid #ededed}
+.manager-table .article-row:last-child{border-bottom:0}
+.manager-table .article-name strong{font-size:14px;font-weight:600}
+.manager-table .article-name small{color:#888;font-size:11px}
+.manager-table .article-name>svg{width:18px}
+.manager-publish{display:flex;align-items:center;gap:13px;white-space:nowrap}
+.manager-status{width:100px;height:32px;padding:0 9px;border:1px solid #dedee0;border-radius:5px;background:#fff;color:#333;font-size:12px;cursor:pointer}
+.manager-status.is-hidden{background:#f5f5f6;color:#777}
+.manager-pin{display:inline-flex;align-items:center;gap:6px;color:#555;font-size:12px;cursor:pointer}
+.manager-pin input{width:16px;height:16px;margin:0;accent-color:#292929;cursor:pointer}
+.manager-pin:has(input:disabled){color:#aaa;cursor:not-allowed}
+.manager-actions{display:flex;justify-content:flex-end;gap:8px;white-space:nowrap}
+.manager-actions button{display:inline-flex;align-items:center;justify-content:center;gap:5px;width:66px;height:32px;padding:0;border:1px solid #dedee0;border-radius:5px;background:#fff;color:#333;font-size:12px;white-space:nowrap;cursor:pointer}
+.manager-actions button svg{width:14px;height:14px}
+.article-manager .demo-banner{border-color:#e7e7e7;background:#f8f8f8;color:#666}
+@media(max-width:900px){.article-table.manager-table .article-row{grid-template-columns:minmax(0,1fr) 210px 150px;gap:12px;padding:12px}}
+@media(max-width:700px){.article-table.manager-table .article-row{grid-template-columns:minmax(0,1fr) 140px;gap:8px}.manager-table .article-name{grid-column:1/-1}.manager-table .manager-publish{display:flex!important;grid-column:1}.manager-actions{grid-column:2}.manager-status{width:90px}.manager-pin span{display:none}}

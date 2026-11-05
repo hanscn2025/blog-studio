@@ -81,7 +81,7 @@ test("lists only Markdown files in the recognized article directory", async () =
       { type: "blob", path: "source/_posts/photo.jpg", size: 9, sha: "ghi" },
     ], truncated: false });
   });
-  assert.deepEqual(articles, [{ file: "source/_posts/hello.md", title: "真实文章标题", category: "OpenWrt 与软路由", channels: ["firmware-flashing", "soft-router"], date: "2025-11-20 01:30:02", updated: "2025-11-20 01:30:02", top: 22, size: 12, sha: "abc" }]);
+  assert.deepEqual(articles, [{ file: "source/_posts/hello.md", title: "真实文章标题", category: "OpenWrt 与软路由", channels: ["firmware-flashing", "soft-router"], date: "2025-11-20 01:30:02", updated: "2025-11-20 01:30:02", top: 22, published: true, size: 12, sha: "abc" }]);
   assert.ok(!JSON.stringify(articles).includes("Private body"));
 });
 

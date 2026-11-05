@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { articleListForDisplay,normalizeRepositoryStatus,reconcilePublishedArticle,serializeArticle,sortArticlesForDisplay,validateArticle } from "../src/article-standard.js";
+import { articleListForDisplay,normalizeRepositoryStatus,planPinnedArticles,rankedPinnedArticles,reconcilePublishedArticle,serializeArticle,sortArticlesForDisplay,validateArticle } from "../src/article-standard.js";
 
 test("generates Hans Blog compatible Markdown and rejects GitHub-incompatible content",()=>{
   const article={title:"测试",slug:"test-post",date:"2026-09-30 10:00:00",updated:"",description:"说明",cover:"https://img.example.com/cover.jpg",category:"建站与部署",tags:"GitHub, Markdown",channels:["indie-site-blog"],keywords:"",comments:true,toc:true,video_as_cover:true,content:"## 一、测试\n\n![测试图片](https://img.example.com/test.png)"};
@@ -45,4 +45,17 @@ test("article list sorts all by creation date, but pinned view by top",()=>{
   assert.deepEqual(sortArticlesForDisplay(articles).map(item=>item.title),["New","Recent pinned","Old pinned"]);
   assert.deepEqual(sortArticlesForDisplay(articles.filter(item=>item.top>0),true).map(item=>item.title),["Old pinned","Recent pinned"]);
   assert.equal(articles[0].title,"Old pinned");
+});
+
+test("keeps five ranked pins, inserts new pins first, and compacts after unpinning",()=>{
+  const articles=Array.from({length:7},(_,index)=>({file:`${index}.md`,title:`Post ${index}`,date:`2026-01-0${index+1}`,top:index<6?10-index:0}));
+  assert.deepEqual(rankedPinnedArticles(articles).map(item=>item.file),["0.md","1.md","2.md","3.md","4.md"]);
+  const blocked=planPinnedArticles(articles,"6.md");
+  assert.equal(blocked.needsReplacement,true);
+  const replaced=planPinnedArticles(articles,"6.md","4.md");
+  assert.deepEqual(replaced.pinned.map(item=>item.file),["6.md","0.md","1.md","2.md","3.md"]);
+  assert.deepEqual(Object.fromEntries(replaced.updates.map(item=>[item.file,item.top])),{"0.md":4,"1.md":3,"2.md":2,"3.md":1,"4.md":0,"5.md":0,"6.md":5});
+  const unpinned=planPinnedArticles(replaced.pinned.map((item,index)=>({...item,top:5-index})),"1.md");
+  assert.deepEqual(unpinned.pinned.map(item=>item.file),["6.md","0.md","2.md","3.md"]);
+  assert.deepEqual(Object.fromEntries(unpinned.updates.map(item=>[item.file,item.top])),{"1.md":0,"2.md":3,"3.md":2});
 });

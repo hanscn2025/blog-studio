@@ -14,6 +14,7 @@ export function validateArticle(article){
   if(/!\[\[/.test(article.content||""))errors.push("Obsidian 本地图片必须先上传图床");
   if(/!\[[^\]]*\]\(data:image\//i.test(article.content||""))errors.push("仍有本地暂存图片未上传图床");
   if(/!\[[^\]]*\]\(asset:\/\//i.test(article.content||""))errors.push("仍有本地暂存图片未上传图床");
+  if(localImagePaths(article.content||"").length)errors.push("正文仍有本地图片路径，请先关联图片并上传图床");
   for(const match of (article.content||"").matchAll(/!\[([^\]]*)\]\(([^)\s]+)\)/g)){
     if(!match[1].trim())errors.push("图片必须填写说明文字");
     if(!/^https?:\/\//i.test(match[2]))errors.push("正文图片必须使用 HTTP(S) 地址");
@@ -53,3 +54,29 @@ export function articleListForDisplay(article, remoteArticles){
 export function sortArticlesForDisplay(articles, pinnedOnly=false){
   return [...articles].sort((a,b)=>(pinnedOnly ? (Number(b.top)||0)-(Number(a.top)||0) : 0) || String(b.date||"").localeCompare(String(a.date||"")) || String(a.file||a.slug||"").localeCompare(String(b.file||b.slug||""),"zh-CN"));
 }
+
+export const PIN_LIMIT=5;
+
+export function rankedPinnedArticles(articles){
+  return sortArticlesForDisplay(articles.filter(article=>article.published!==false&&Number(article.top)>0),true).slice(0,PIN_LIMIT);
+}
+
+export function planPinnedArticles(articles,targetFile,replacementFile=""){
+  const current=rankedPinnedArticles(articles);
+  const target=articles.find(article=>article.file===targetFile);
+  if(!target)throw new Error("未找到要调整的文章");
+  let next;
+  if(Number(target.top)>0){
+    next=current.filter(article=>article.file!==targetFile);
+  }else{
+    if(current.length>=PIN_LIMIT&&!replacementFile)return {needsReplacement:true,pinned:current,updates:[]};
+    next=[target,...current.filter(article=>article.file!==replacementFile&&article.file!==targetFile)].slice(0,PIN_LIMIT);
+  }
+  const positions=new Map(next.map((article,index)=>[article.file,PIN_LIMIT-index]));
+  const updates=articles.filter(article=>Number(article.top)>0||positions.has(article.file)).map(article=>({
+    file:article.file,
+    top:positions.get(article.file)||0,
+  })).filter(update=>Number(articles.find(article=>article.file===update.file)?.top)!==update.top);
+  return {needsReplacement:false,pinned:next,updates};
+}
+import { localImagePaths } from "./import-local-images.js";

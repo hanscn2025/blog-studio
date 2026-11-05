@@ -48,6 +48,32 @@ export async function hydrateDraftImages(drafts) {
   } finally { db.close(); }
 }
 
+export async function replaceStoredDraftImage(id, src) {
+  const db = await database();
+  try {
+    await new Promise((resolve, reject) => {
+      const transaction = db.transaction(objectStore, "readwrite");
+      transaction.objectStore(objectStore).put(src, id);
+      transaction.oncomplete = resolve;
+      transaction.onerror = () => reject(transaction.error);
+    });
+    storedIds.add(id);
+  } finally { db.close(); }
+}
+
+export async function removeStoredDraftImage(id) {
+  const db = await database();
+  try {
+    await new Promise((resolve, reject) => {
+      const transaction = db.transaction(objectStore, "readwrite");
+      transaction.objectStore(objectStore).delete(id);
+      transaction.oncomplete = resolve;
+      transaction.onerror = () => reject(transaction.error);
+    });
+    storedIds.delete(id);
+  } finally { db.close(); }
+}
+
 export function draftsWithoutImageData(drafts) {
   return drafts.map(draft => ({ ...draft, pendingImages: (draft.pendingImages || []).map(({ src, ...image }) => image) }));
 }

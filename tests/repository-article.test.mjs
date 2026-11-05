@@ -25,3 +25,17 @@ test("没有 Front Matter 时拒绝可能破坏原文的保存", () => {
   assert.equal(parseRepositoryArticle("正文", "source/_posts/a.md"), null);
   assert.throws(() => mergeRepositoryArticle("正文", {}, {}), /Front Matter/);
 });
+
+test("下架与置顶只更新对应 Front Matter 字段并可撤销", () => {
+  const before = parseRepositoryArticle(raw, "source/_posts/old-post.md");
+  const changed = mergeRepositoryArticle(raw, before, { ...before, published: false, top: 1 });
+  assert.match(changed, /published: false/);
+  assert.match(changed, /top: 1/);
+  assert.match(changed, /custom_setting:\n  nested: keep-me/);
+  const next = parseRepositoryArticle(changed, "source/_posts/old-post.md");
+  assert.equal(next.published, false);
+  assert.equal(next.top, 1);
+  const restored = mergeRepositoryArticle(changed, next, { ...next, published: true, top: 0 });
+  assert.equal(parseRepositoryArticle(restored, "source/_posts/old-post.md").published, true);
+  assert.equal(parseRepositoryArticle(restored, "source/_posts/old-post.md").top, 0);
+});

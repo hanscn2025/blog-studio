@@ -110,6 +110,7 @@ function frontMatter(content) {
     date: first(values.date),
     updated: first(values.updated) || first(values.date),
     top: /^\d+$/.test(String(first(values.top)).trim()) ? Number(first(values.top)) : 0,
+    published: String(first(values.published)).trim().toLowerCase() !== "false",
   };
 }
 

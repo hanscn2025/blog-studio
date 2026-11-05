@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { hasYouTubeEmbed,parseMarkdownImage,parseYouTubeIframe,referencedDraftImages,youtubeEmbed } from "../src/markdown-media.js";
+import { articleImageSources,hasYouTubeEmbed,parseMarkdownImage,parseYouTubeIframe,referencedDraftImages,youtubeEmbed } from "../src/markdown-media.js";
+
+test("cover picker lists unique images from this article only",()=>{
+  assert.deepEqual(articleImageSources('![图](asset://body)\n![重复](asset://body)\n![远程](https://img.example.com/001.png)\n![本地](<./images/002.jpg>)\n<img src="https://img.example.com/003.webp">'),["asset://body","https://img.example.com/001.png","https://img.example.com/003.webp"]);
+});
 
 test("pending image count follows body and cover references",()=>{
   const images=[{id:"body"},{id:"cover"},{id:"deleted"}];

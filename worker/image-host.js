@@ -5,6 +5,8 @@ const settingKey = "image-host";
 const maxImageBytes = 8 * 1024 * 1024;
 const maxMediaBytes = 80 * 1024 * 1024;
 const types = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif" };
+const draftIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const tempImageNamePattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:png|jpg|webp|gif)$/i;
 const packageExtensions = /\.(?:zip|7z|rar|tar|gz|tgz|dmg|exe|msi|deb|rpm|apk|pdf)$/i;
 const json = (data, status = 200) => Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
 
@@ -37,6 +39,22 @@ function client(config) {
 }
 
 function bucketUrl(config) { return `https://${config.accountId}.r2.cloudflarestorage.com/${config.bucket}`; }
+
+export async function draftImagePrefix(access, draftId) {
+  if (!access?.sub || !draftIdPattern.test(draftId)) throw new Error("草稿身份无效");
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(access.sub));
+  const owner = [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
+  return `_drafts/${owner}/${draftId}/`;
+}
+
+function imageInput(input) {
+  const match = String(input.src || "").match(/^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/);
+  if (!match || match[2].length > Math.ceil(maxImageBytes * 4 / 3) + 4) throw new Error("图片数据格式无效或超过 8 MB");
+  const binary = atob(match[2]);
+  if (binary.length > maxImageBytes) throw new Error("图片超过 8 MB 限制");
+  return { type: match[1], body: Uint8Array.from(binary, char => char.charCodeAt(0)) };
+}
+export const ownsTempImage = (key, prefix) => typeof key === "string" && key.startsWith(prefix) && tempImageNamePattern.test(key.slice(prefix.length));
 
 function imageKeys(xml, slug) {
   return new Set([...xml.matchAll(/<Key>([^<]+)<\/Key>/g)].map(match => match[1].match(new RegExp(`^${slug}/(\\d{3})\\.(?:png|jpg|webp|gif)$`))?.[1]).filter(Boolean).map(Number));
@@ -82,7 +100,7 @@ async function limitedJson(request) {
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
-export async function imageHostApi(request, env) {
+export async function imageHostApi(request, env, access) {
   if (!env.DB || !env.CONFIG_ENCRYPTION_KEY) return json({ error: "后台加密存储尚未就绪" }, 503);
   const url = new URL(request.url);
   if (request.method !== "GET" && request.headers.get("origin") !== url.origin) return json({ error: "请求来源不匹配" }, 403);
@@ -125,20 +143,84 @@ export async function imageHostApi(request, env) {
       }
       throw new Error("该文章图片已达到 999 张上限");
     }
+    if (url.pathname === "/api/images/draft-upload" && request.method === "POST") {
+      if (!config) return json({ error: "请先连接 R2 图床" }, 409);
+      const input = await limitedJson(request), prefix = await draftImagePrefix(access, String(input.draftId || ""));
+      const { type, body } = imageInput(input);
+      const key = `${prefix}${crypto.randomUUID()}.${types[type]}`;
+      const response = await client(config).fetch(`${bucketUrl(config)}/${key}`, { method: "PUT", headers: { "Content-Type": type, "If-None-Match": "*" }, body });
+      if (!response.ok) return json({ error: `R2 草稿图片上传失败（HTTP ${response.status}）` }, 502);
+      return json({ key, url: `${config.publicUrl}/${key}` });
+    }
+    if (url.pathname === "/api/images/draft-source" && request.method === "POST") {
+      if (!config) return json({ error: "请先连接 R2 图床" }, 409);
+      const input = await limitedJson(request), prefix = await draftImagePrefix(access, String(input.draftId || ""));
+      const tempKey = String(input.tempKey || "");
+      if (!ownsTempImage(tempKey, prefix)) throw new Error("草稿图片路径无效");
+      const response = await client(config).fetch(`${bucketUrl(config)}/${tempKey}`);
+      if (!response.ok) return json({ error: `草稿图片读取失败（HTTP ${response.status}）` }, 502);
+      const type = response.headers.get("content-type") || "";
+      if (!types[type] || Number(response.headers.get("content-length")) > maxImageBytes) throw new Error("草稿图片格式无效或超过 8 MB");
+      const body = new Uint8Array(await response.arrayBuffer());
+      if (body.length > maxImageBytes) throw new Error("草稿图片超过 8 MB 限制");
+      return json({ src: `data:${type};base64,${btoa(Array.from(body, byte => String.fromCharCode(byte)).join(""))}` });
+    }
+    if (url.pathname === "/api/images/draft-promote" && request.method === "POST") {
+      if (!config) return json({ error: "请先连接 R2 图床" }, 409);
+      const input = await limitedJson(request), prefix = await draftImagePrefix(access, String(input.draftId || ""));
+      const tempKey = String(input.tempKey || ""), slug = String(input.slug || "");
+      if (!ownsTempImage(tempKey, prefix)) throw new Error("草稿图片路径无效");
+      imageObjectKey(slug, 1, "image/png");
+      const storage = client(config), original = await storage.fetch(`${bucketUrl(config)}/${tempKey}`);
+      if (!original.ok) return json({ error: `草稿图片读取失败（HTTP ${original.status}）` }, 502);
+      const type = original.headers.get("content-type") || "";
+      if (!types[type]) throw new Error("草稿图片格式无效");
+      if (Number(original.headers.get("content-length")) > maxImageBytes) throw new Error("草稿图片超过 8 MB 限制");
+      const body = new Uint8Array(await original.arrayBuffer());
+      if (body.length > maxImageBytes) throw new Error("草稿图片超过 8 MB 限制");
+      const listing = await storage.fetch(`${bucketUrl(config)}?list-type=2&prefix=${encodeURIComponent(`${slug}/`)}&max-keys=1000`);
+      if (!listing.ok) return json({ error: `R2 目录读取失败（HTTP ${listing.status}）` }, 502);
+      const xml = await listing.text();
+      if (/<IsTruncated>true<\/IsTruncated>/.test(xml)) throw new Error("该文章图片已达到 999 张上限");
+      const used = imageKeys(xml, slug);
+      for (let number = 1; number <= 999; number++) {
+        if (used.has(number)) continue;
+        const key = imageObjectKey(slug, number, type);
+        const response = await storage.fetch(`${bucketUrl(config)}/${key}`, { method: "PUT", headers: { "Content-Type": type, "If-None-Match": "*" }, body });
+        if (response.status === 412) continue;
+        if (!response.ok) return json({ error: `正式图片写入失败（HTTP ${response.status}）` }, 502);
+        return json({ key, url: `${config.publicUrl}/${key}`, tempKey });
+      }
+      throw new Error("该文章图片已达到 999 张上限");
+    }
+    if (url.pathname === "/api/images/draft-cleanup" && request.method === "POST") {
+      if (!config) return json({ error: "请先连接 R2 图床" }, 409);
+      const input = await limitedJson(request), prefix = await draftImagePrefix(access, String(input.draftId || ""));
+      if (!Array.isArray(input.keys) || input.keys.length > 200 || input.keys.some(key => !ownsTempImage(key, prefix))) throw new Error("草稿图片清理范围无效");
+      const storage = client(config);
+      for (const key of new Set(input.keys)) {
+        const response = await storage.fetch(`${bucketUrl(config)}/${key}`, { method: "DELETE" });
+        if (!response.ok && response.status !== 404) return json({ error: `临时图片清理失败（HTTP ${response.status}）` }, 502);
+      }
+      return json({ deleted: [...new Set(input.keys)].length });
+    }
     if (url.pathname === "/api/images/media" && request.method === "GET") {
       if (!config) return json({ error: "请先连接 R2 图床" }, 409);
       const slug = url.searchParams.get("slug") || "";
       if (slug) imageObjectKey(slug, 1, "image/png");
+      const prefix = url.searchParams.get("prefix") || (slug ? `${slug}/` : "");
+      if (prefix && (prefix.length > 512 || !prefix.endsWith("/") || prefix.startsWith("/") || prefix.split("/").includes(".."))) throw new Error("媒体目录无效");
       const cursor = url.searchParams.get("cursor") || "";
       if (cursor.length > 2048) throw new Error("分页标记无效");
-      const params = new URLSearchParams({ "list-type": "2", "max-keys": "200", "encoding-type": "url" });
-      if (slug) params.set("prefix", `${slug}/`);
+      const params = new URLSearchParams({ "list-type": "2", "max-keys": "200", "encoding-type": "url", delimiter: "/" });
+      if (prefix) params.set("prefix", prefix);
       if (cursor) params.set("continuation-token", cursor);
       const response = await client(config).fetch(`${bucketUrl(config)}?${params}`);
       if (!response.ok) return json({ error: `R2 文件列表读取失败（HTTP ${response.status}）` }, 502);
       const xml = await response.text();
       const nextCursor = xml.match(/<NextContinuationToken>([^<]+)<\/NextContinuationToken>/)?.[1]?.replaceAll("&amp;", "&") || "";
-      return json({ items: mediaItems(xml, config), nextCursor });
+      const folders = [...xml.matchAll(/<CommonPrefixes>\s*<Prefix>([^<]+)<\/Prefix>\s*<\/CommonPrefixes>/g)].map(match => decodeURIComponent(match[1]));
+      return json({ folders, items: mediaItems(xml, config), nextCursor });
     }
     if (url.pathname === "/api/images/media/upload" && request.method === "POST") {
       if (!config) return json({ error: "请先连接 R2 图床" }, 409);

@@ -9,6 +9,11 @@ test("version page reads article history and never presents a fake site rollback
   assert.match(source,/\/api\/github\/history/);
   assert.match(source,/\/api\/github\/revision/);
   assert.match(source,/\/api\/github\/update/);
-  assert.match(source,/当前后台未接入 Pages 部署记录与回退授权/);
+  assert.doesNotMatch(source,/整站部署回退/);
+  assert.match(source,/role="tablist"/);
+  assert.match(source,/<SecurityBackup\s*\/>/);
+  assert.doesNotMatch(source,/setActive\("安全与备份"\)/);
+  const sidebar=readFileSync(new URL("../src/MainSidebar.jsx",import.meta.url),"utf8");
+  assert.doesNotMatch(sidebar,/安全与备份|备份恢复/);
   assert.doesNotMatch(source,/<strong>尚未连接 GitHub 仓库<\/strong>/);
 });
