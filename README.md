@@ -52,7 +52,7 @@ npm run build
 2. 在自己的 Cloudflare 账户创建 D1；在私有部署仓的 `wrangler.jsonc` 中填写自己的 Worker 名称、D1 名称及 ID（绑定名保持 `DB`），以及唯一允许写入的博客**源码仓库** `PUBLISH_ALLOWED_REPOSITORY`。公开仓的该字段留空，默认拒绝写入。使用 Wrangler 部署前先核对目标 Cloudflare 账户与 Worker 名称；Access 未配置完成前，Worker 会返回 503。
 3. 为 Worker 设置随机 32 字节 Base64 `CONFIG_ENCRYPTION_KEY` Secret；不要把值提交到仓库。单独安全备份该密钥，否则加密配置将无法恢复。
 4. 在 Cloudflare Access 创建仅本人可登录的应用并保护后台域名；为 Worker 配置 `ACCESS_TEAM_DOMAIN`（例如 `https://team.cloudflareaccess.com`）和该应用的 `ACCESS_AUD`。Worker 会验证 JWT 签名、签发者、有效期和受众。访问保护未配置时返回 503。
-5. 在自己的 GitHub 账户创建 GitHub App，授予博客**源码仓库**最小 Contents 读写权限，安装时仅选择要管理的仓库。生成并下载 App 的 PEM 私钥。
+5. 在自己的 GitHub 账户创建 GitHub App，授予博客**源码仓库** Contents 读写权限；如需从后台提交导航审核，再授予 Pull requests 读写权限。安装时仅选择要管理的仓库。生成并下载 App 的 PEM 私钥。
 6. 登录后台「GitHub 设置」，填写 App ID、安装 ID 和 PEM。后台先获取短期安装令牌验证权限，然后将 PEM 用 AES-GCM 加密保存在 D1；浏览器不持久化、不回显私钥。选择授权仓库并确认识别结果。若使用 R2 图床，再到「图床设置」单独连接自己的测试桶并验证公开图片地址。
 
 GitHub App 的 OAuth Client Secret 不是 PEM 私钥，这套安装令牌流程不需要填写 Client Secret。私钥不要提交到后台代码仓库或博客源码仓库。开发仓库只需授权 App；生产仓库不需要授权后台写入。

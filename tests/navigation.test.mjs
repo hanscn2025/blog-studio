@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseChannelNavigation, parseHexoMenu, parseHugoTomlMenu, parseHugoYamlMenu, readRepositoryNavigation } from "../worker/navigation.js";
+import { parseChannelNavigation, parseHexoMenu, parseHugoTomlMenu, parseHugoYamlMenu, readRepositoryNavigation, renderChannelNavigation, submitNavigationReview } from "../worker/navigation.js";
 
 const yaml = `enable: true
 items:
@@ -24,6 +24,33 @@ test("reads channel tree without treating unrelated theme menu as article channe
     { key: "more", name: "更多", level: 1 },
   ]);
   assert.equal(parseChannelNavigation("menu:\n  首页: /\n"), null);
+});
+
+test("navigation review preserves existing metadata and submits only a development branch", async () => {
+  const sha = "a".repeat(40);
+  const original = `# Keep this comment\nitems:\n  - key: crossborder\n    name: 跨境出海\n    variant: compact\n    children:\n      - key: tools\n        name: 工具分享\n        url: /custom/\n`;
+  const draft = [...parseChannelNavigation(original), { key: "overseas-card", name: "海外虚拟卡", level: 2, groupKey: "crossborder" }];
+  const rendered = renderChannelNavigation(original, draft);
+  assert.match(rendered, /# Keep this comment/);
+  assert.match(rendered, /variant: compact/);
+  assert.match(rendered, /url: \/custom\//);
+  assert.match(rendered, /key: overseas-card/);
+  const calls = [];
+  const config = { repository: "owner/dev-blog", site: { defaultBranch: "main" }, navigationSource: { path: "source/_data/navigation.yml", format: "channels" } };
+  const request = async (url, options = {}) => {
+    calls.push({ url, method: options.method || "GET", body: options.body && JSON.parse(options.body) });
+    if (url.includes("/contents/")) return options.method === "PUT" ? Response.json({ content: { sha: "b".repeat(40) } }) : Response.json({ type: "file", size: original.length, encoding: "base64", sha, content: Buffer.from(original).toString("base64") });
+    if (url.includes("/git/ref/heads/main")) return Response.json({ object: { sha: "c".repeat(40) } });
+    if (url.endsWith("/git/refs")) return Response.json({ ref: "refs/heads/codex/navigation-test" });
+    if (url.endsWith("/pulls")) return Response.json({ html_url: "https://github.com/owner/dev-blog/pull/1" });
+    throw new Error(url);
+  };
+  await assert.rejects(() => submitNavigationReview(config, "token", draft, "d".repeat(40), request), /已被更新/);
+  assert.equal(calls.length, 1);
+  const result = await submitNavigationReview(config, "token", draft, sha, request);
+  assert.equal(result.url, "https://github.com/owner/dev-blog/pull/1");
+  assert.equal(calls.filter(call => call.method !== "GET").length, 3);
+  assert.match(Buffer.from(calls.find(call => call.method === "PUT").body.content, "base64").toString(), /key: overseas-card/);
 });
 
 test("reads only an authorized repository navigation file", async () => {
