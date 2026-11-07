@@ -106,24 +106,24 @@ export function App(){
   useEffect(()=>{let active=true;hydrateDraftImages(drafts).then(items=>{if(!active)return;setDrafts(items);setArticle(items[0]||{...initialArticle,draftId:crypto.randomUUID()});setDraftsReady(true)}).catch(error=>{if(active)setDraftsError(error.message)});return()=>{active=false}},[]);
   useEffect(()=>{if(!draftsReady)return;if(hasDraftContent(article)||article.draftStarted)setDrafts(current=>upsertDraft(current,article));setSaveState("saving")},[article,draftsReady]);
   useEffect(()=>{if(!draftsReady)return;saveQueue.current=saveQueue.current.catch(()=>{}).then(async()=>{await persistDraftImages(drafts);localStorage.setItem(DRAFTS_KEY,JSON.stringify(draftsWithoutImageData(drafts)));setSavedAt(new Date().toLocaleTimeString("zh-CN",{hour:"2-digit",minute:"2-digit"}));setSaveState("saved")}).catch(()=>{setSaveState("error");setToast("草稿保存失败：图片仍在当前页面，请勿关闭；请先导出文章")})},[drafts,draftsReady]);
-  const draftNeedsWarning=active==="写作"&&!article.remote&&(hasDraftContent(article)||article.draftStarted)&&(saveState!=="saved"||cloudSaveState!=="已同步云端");
+  const draftNeedsWarning=active==="写作"&&!article.remote&&(hasDraftContent(article)||article.draftStarted)&&(saveState!=="saved"||(!import.meta.env.DEV&&cloudSaveState!=="已同步云端"));
+  const draftWarningMessage=import.meta.env.DEV?"本机草稿尚未保存完成。现在保存并离开？":"草稿尚未同步云端。现在只保存到本机并离开？";
   useEffect(()=>{const warn=event=>{if(draftNeedsWarning){event.preventDefault();event.returnValue=""}};window.addEventListener("beforeunload",warn);return()=>window.removeEventListener("beforeunload",warn)},[draftNeedsWarning]);
   async function saveDraftNow(current){
     const next=upsertDraft(drafts,current);
     saveQueue.current=saveQueue.current.catch(()=>{}).then(async()=>{await persistDraftImages(next);localStorage.setItem(DRAFTS_KEY,JSON.stringify(draftsWithoutImageData(next)))});
-    await saveQueue.current;
-    setDrafts(next);
-    setSaveState("saved");
+    try{await saveQueue.current;setDrafts(next);setSaveState("saved")}
+    catch(error){setSaveState("error");throw error}
   }
-  const notify=m=>{setToast(m);setTimeout(()=>setToast(""),1800)},closeArticle=async()=>{if(!article.remote){if(draftNeedsWarning&&!window.confirm("草稿尚未同步云端。现在只保存到本机并返回？"))return;try{await saveDraftNow(article)}catch(error){notify(`草稿保存失败：${error.message}；请勿关闭页面`);return}}setActive(article.remote?"文章管理":"草稿箱");notify(article.remote?"仓库文章请在文章管理中编辑":"文章已保存到当前浏览器草稿箱")};
+  const notify=m=>{setToast(m);setTimeout(()=>setToast(""),1800)},closeArticle=async()=>{if(!article.remote){if(draftNeedsWarning&&!window.confirm(draftWarningMessage))return;try{await saveDraftNow(article)}catch(error){notify(`草稿保存失败：${error.message}；请勿关闭页面`);return}}setActive(article.remote?"文章管理":"草稿箱");notify(article.remote?"仓库文章请在文章管理中编辑":hasDraftContent(article)||article.draftStarted?"文章已保存到当前浏览器草稿箱":"空白文章未创建草稿")};
   async function navigate(next){
     if(active==="写作"&&next!=="写作"&&!article.remote){
-      if(draftNeedsWarning&&!window.confirm("草稿尚未同步云端。现在只保存到本机并离开？"))return;
+      if(draftNeedsWarning&&!window.confirm(draftWarningMessage))return;
       try{await saveDraftNow(article)}catch(error){notify(`草稿保存失败：${error.message}；请勿关闭页面`);return}
     }
     setActive(next);
   }
-  const createArticle=async()=>{if(active==="写作"&&!article.remote){if(draftNeedsWarning&&!window.confirm("当前草稿尚未同步云端。现在只保存到本机并新建文章？"))return;try{await saveDraftNow(article)}catch(error){notify(`草稿保存失败：${error.message}；请勿关闭页面`);return}}setCloudSaveState("仅本机");setArticle({...createArticleFromTemplate(),draftId:crypto.randomUUID(),draftStarted:true});setPreview(false);setActive("写作")};
+  const createArticle=async()=>{if(active==="写作"&&!article.remote){if(draftNeedsWarning&&!window.confirm(draftWarningMessage))return;try{await saveDraftNow(article)}catch(error){notify(`草稿保存失败：${error.message}；请勿关闭页面`);return}}setCloudSaveState("仅本机");setArticle({...createArticleFromTemplate(),draftId:crypto.randomUUID()});setPreview(false);setActive("写作")};
   const page=active==="首页"?<HomePage createArticle={createArticle} setActive={setActive}/>:active==="写作"?<Editor article={article} setArticle={setArticle} preview={preview} setPreview={setPreview} savedAt={savedAt} saveState={saveState} notify={notify} siteProfile={siteProfile} watermark={watermark} openPublish={()=>setActive("发布中心")} onCloudSaved={loadCloudDrafts} onCloudStatusChange={setCloudSaveState} saveDraft={saveDraftNow}/>:active==="草稿箱"?<DraftBox drafts={drafts} cloudDrafts={cloudDrafts} cloudError={cloudError} openCloudDraft={openCloudDraft} removeCloudDraft={deleteDraft} openDraft={item=>{setArticle(item);setActive("写作")}} removeDraft={deleteDraft} createArticle={createArticle}/>:active==="文章管理"?<ArticleManager siteProfile={siteProfile} targetPath={targetArticlePath} clearTargetPath={()=>setTargetArticlePath("")} renderEditor={(remoteArticle,setRemoteArticle,saveRemote)=><Editor article={remoteArticle} setArticle={setRemoteArticle} preview={preview} setPreview={setPreview} notify={notify} siteProfile={siteProfile} watermark={watermark} saveRepository={saveRemote}/>}/>:active==="媒体库"?<MediaLibrary drafts={drafts} openReference={ref=>{if(ref.kind==="draft"){const found=drafts.find(item=>item.draftId===ref.draftId);if(found){setArticle(found);setActive("写作")}}else{setTargetArticlePath(ref.file);setActive("文章管理")}}}/>:active==="发布中心"?<PublishPage article={article} setArticle={setArticle} setActive={setActive} onPublished={finishPublished}/>:active==="版本回溯"?<VersionPage setActive={setActive}/>:active==="GitHub 设置"?<GitHubSettings notify={notify} profile={siteProfile}/>:<ModulePage name={active} article={article} setArticle={setArticle} setActive={setActive} notify={notify} siteProfile={siteProfile} setSiteProfile={setSiteProfile} imageHost={imageHost} setImageHost={setImageHost} watermark={watermark} setWatermark={setWatermark}/>;
   if(draftsError)return <div role="alert">{draftsError}；请勿清理浏览器数据或关闭已有草稿标签。</div>;
   if(!draftsReady)return <div role="status">正在恢复本地草稿…</div>;
@@ -159,10 +159,10 @@ function Editor({article,setArticle,preview,setPreview,savedAt,saveState,notify,
   const syncedDraft=useRef({id:"",signature:""}),failedDraft=useRef({id:"",signature:""});
   const draftSignature=value=>JSON.stringify({...value,cloudRevision:undefined,cloudSavedAt:undefined});
   const syncOnExit=useRef(null),publishing=useRef(false);
-  syncOnExit.current=()=>{const current=articleRef.current;if(!publishing.current&&!cloudSaving&&current.draftId&&(hasDraftContent(current)||current.draftStarted)&&syncedDraft.current.signature!==draftSignature(current))saveCloudDraft(true)};
+  syncOnExit.current=()=>{const current=articleRef.current;if(!import.meta.env.DEV&&!publishing.current&&!cloudSaving&&current.draftId&&(hasDraftContent(current)||current.draftStarted)&&syncedDraft.current.signature!==draftSignature(current))saveCloudDraft(true)};
   useEffect(()=>{const onVisibility=()=>{if(document.visibilityState==="hidden")syncOnExit.current?.()},onOnline=()=>{failedDraft.current={id:"",signature:""};syncOnExit.current?.()};document.addEventListener("visibilitychange",onVisibility);window.addEventListener("online",onOnline);return()=>{document.removeEventListener("visibilitychange",onVisibility);window.removeEventListener("online",onOnline);syncOnExit.current?.()}},[]);
   useEffect(()=>{
-    if(saveRepository||article.demo||article.remote||!article.draftId||(!hasDraftContent(article)&&!article.draftStarted))return;
+    if(import.meta.env.DEV||saveRepository||article.demo||article.remote||!article.draftId||(!hasDraftContent(article)&&!article.draftStarted))return;
     const signature=draftSignature(article);
     if(syncedDraft.current.id===article.draftId&&syncedDraft.current.signature===signature){setCloudStatus("已同步云端");return}
     if(failedDraft.current.id===article.draftId&&failedDraft.current.signature===signature)return;
@@ -216,6 +216,7 @@ function Editor({article,setArticle,preview,setPreview,savedAt,saveState,notify,
     }catch(error){notify(error.message||"图片关联失败，原文保持不变")}
   }
   async function saveCloudDraft(silent=false){
+    if(import.meta.env.DEV){setCloudStatus("本机已存");if(!silent)notify("本机草稿已保存");return}
     if(article.demo||article.remote||!article.draftId){if(!silent)notify("只有新建草稿可以同步到云端");return}
     if(localImagePaths(article.content||"").length){setCloudStatus("需关联本地图片");if(!silent)notify("请先关联 Markdown 中的本地图片");return}
     if(article.cover&&!/^https?:\/\/|^asset:\/\//i.test(article.cover)){setCloudStatus("需处理本地封面");if(!silent)notify("请先处理本地封面图片");return}
@@ -244,15 +245,15 @@ function Editor({article,setArticle,preview,setPreview,savedAt,saveState,notify,
       setArticle(current=>current.draftId===article.draftId?{...current,cloudRevision:result.revision,cloudSavedAt:result.updatedAt}:current);
       await onCloudSaved?.();
       setCloudStatus(cacheWarning?"已同步，图片缓存待清理":"已同步云端");
-      if(!silent)notify(cacheWarning?"云端草稿已保存，但本机图片缓存清理失败":`云端草稿已保存（第 ${result.revision} 版）`);
+      if(!silent)notify(cacheWarning?"草稿已保存，图片缓存清理失败":"草稿已保存");
     }catch(error){if(!String(error.message).includes("同步期间文章有新改动"))failedDraft.current={id:article.draftId,signature:draftSignature(articleRef.current)};setCloudStatus(`同步失败：${error.message||"请重试"}`);if(!silent)notify(error.message||"云端草稿保存失败；本机副本仍保留")}
     finally{setCloudSaving(false)}
   }
   async function saveDraftExplicitly(){
+    if(!hasDraftContent(articleRef.current)&&!articleRef.current.draftStarted)return;
     setDraftSaving(true);
     try{
       await saveDraft(articleRef.current);
-      notify("本机草稿已保存；正在同步云端");
       await saveCloudDraft();
     }catch(error){notify(`草稿保存失败：${error.message}；请勿关闭页面`)}
     finally{setDraftSaving(false)}
@@ -325,7 +326,7 @@ function Editor({article,setArticle,preview,setPreview,savedAt,saveState,notify,
       <div className="tool-group extra-group"><select aria-label="插入更多内容" defaultValue="" onChange={e=>{insertExtra(e.target.value);e.target.value=""}}><option value="">更多</option><option value="math-inline">行内公式</option><option value="math-block">公式块</option><option value="footnote">脚注</option><option value="details">折叠内容</option></select></div>
       <div className="editor-actions">
         {!saveRepository&&<button className="import-action" title="导入 Markdown 文件" aria-label="导入 Markdown" onClick={()=>fileInput.current?.click()}><FileArrowUp/><span>导入</span></button>}
-        {!saveRepository&&<button className="import-action" title={saveState==="error"?"本机保存失败":cloudStatus} disabled={draftSaving||cloudSaving} onClick={saveDraftExplicitly}><Database/><span>{draftSaving||cloudSaving?"保存中…":saveState==="error"||cloudStatus.startsWith("同步失败")?"重试保存":cloudStatus==="已同步云端"&&saveState==="saved"?"已保存":"保存草稿"}</span></button>}
+        {!saveRepository&&<><button className="import-action" disabled={draftSaving||cloudSaving||(!hasDraftContent(article)&&!article.draftStarted)} onClick={saveDraftExplicitly}>{draftSaving||cloudSaving?<span className="save-draft-spinner" aria-hidden="true"/>:<Database/>}<span>保存草稿</span></button><span className={`draft-save-status${saveState==="error"||cloudStatus.startsWith("同步失败")?" error":""}`} role="status" title={!hasDraftContent(article)&&!article.draftStarted?"开始编辑后可保存":saveState==="error"?"本机保存失败":cloudStatus}>{!hasDraftContent(article)&&!article.draftStarted?"开始编辑后可保存":saveState==="error"?"保存失败":draftSaving||cloudSaving?"保存中":cloudStatus.startsWith("同步失败")?"云端失败":cloudStatus}</span></>}
         {localCount>0&&<button className="import-action" title="选择本地图片所在文件夹，关联 Markdown 图片" onClick={()=>localDirectoryInput.current?.click()}><Folder/><span>关联图片 {localCount}</span></button>}
         <button title={propertiesOpen?"隐藏文章属性":"显示文章属性"} aria-label={propertiesOpen?"隐藏文章属性":"显示文章属性"} className={propertiesOpen?"active":""} onClick={()=>setPropertiesOpen(!propertiesOpen)}><Gear/><span>属性</span></button>
         <button className="preview-action" title={preview?"切换到 Markdown 源码":"切换到可视化编辑"} aria-label={preview?"切换到 Markdown 源码":"切换到可视化编辑"} onClick={()=>setPreview(!preview)}>{preview?<PencilSimple/>:<Eye/>}<span>{preview?"Markdown":"可视化"}</span></button>
@@ -333,6 +334,7 @@ function Editor({article,setArticle,preview,setPreview,savedAt,saveState,notify,
         <button className="publish-action" title={saveRepository?"保存为待提交更新":"检查并提交到开发仓库"} aria-label={saveRepository?"保存为待提交更新":"检查并提交到开发仓库"} disabled={!saveRepository&&cloudSaving} onClick={saveRepository||(()=>{publishing.current=true;openPublish()})}><PaperPlaneTilt/><span>{saveRepository?"保存待提交更新":"提交文章"}</span></button>
       </div>
     </div>
+    {!saveRepository&&(saveState==="error"||cloudStatus.startsWith("同步失败"))&&<div className="draft-save-error" role="alert">{saveState==="error"?"本机草稿保存失败，请勿关闭页面，点击“保存草稿”重试。":`云端草稿保存失败：${cloudStatus.replace(/^同步失败：/,"")}。本机副本仍保留，点击“保存草稿”重试。`}</div>}
     <div className="editor-body"><article className="note-page"><h1 contentEditable suppressContentEditableWarning onBlur={e=>{const title=e.currentTarget.textContent||"";update({title,...(!article.slug&&{slug:slugFromTitle(title)})})}}>{article.title}</h1><div className="note-divider"/>{localCount>0&&<div className="local-image-notice" role="status"><span>这篇文章引用了 {localCount} 张电脑上的图片。选择图片所在文件夹后即可预览；点击「同步云端」后才会暂存到当前公开图床。</span><button type="button" onClick={()=>localDirectoryInput.current?.click()}>选择图片文件夹</button></div>}{preview?<div className="article-rendered-preview" data-color-mode="light"><VisualEditor value={article.content||""} onChange={value=>changeContent(value,true)} onReady={setVisualEditor}/></div>:<div ref={editorHost} onPaste={pasteImages} onKeyDown={editorKeys} className="markdown-workbench" data-color-mode="light"><Suspense fallback={<p role="status">正在加载 Markdown 编辑器…</p>}><MDEditor value={article.content||""} onChange={value=>changeContent(value||"",true)} preview="edit" hideToolbar visibleDragbar={false} height="100%" textareaProps={{"aria-label":"Markdown 正文"}}/></Suspense></div>}</article>{propertiesOpen&&<RightProperties article={article} update={update} close={()=>setPropertiesOpen(false)} siteProfile={siteProfile} notify={notify} insertYouTube={insertYouTube} watermark={watermark}/>}</div>
     <footer className="note-status"><span>{preview?"可视化编辑":"Markdown 源码编辑"} · {article.content.length} 字符</span></footer>
   </section>

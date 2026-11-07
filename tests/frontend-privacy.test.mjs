@@ -14,7 +14,7 @@ test("writing menu starts a separately identified draft without replacing the cu
   const sidebar=readFileSync(new URL("../src/MainSidebar.jsx",import.meta.url),"utf8");
   const app=readFileSync(new URL("../src/App.jsx",import.meta.url),"utf8");
   assert.equal((sidebar.match(/target==="写作"\?createArticle\(\):setActive\(target\)/g)||[]).length,2);
-  assert.match(app,/createArticle=async\(\)=>\{[\s\S]*?setArticle\(\{\.\.\.createArticleFromTemplate\(\),draftId:crypto\.randomUUID\(\),draftStarted:true\}\)/);
+  assert.match(app,/createArticle=async\(\)=>\{[\s\S]*?setArticle\(\{\.\.\.createArticleFromTemplate\(\),draftId:crypto\.randomUUID\(\)\}\)/);
   assert.match(app,/setDrafts\(current=>upsertDraft\(current,article\)\)/);
   assert.match(app,/<MainSidebar[^>]+createArticle=\{createArticle\}/);
 });

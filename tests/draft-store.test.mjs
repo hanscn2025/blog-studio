@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { pendingKey, removeDraft, savePending, upsertDraft } from "../src/draft-store.js";
+import { hasDraftContent, pendingKey, removeDraft, savePending, upsertDraft } from "../src/draft-store.js";
+import { createArticleFromTemplate } from "../src/article-template.js";
 import { draftsWithoutImageData } from "../src/draft-image-store.js";
 
 test("draft metadata omits bulky image data without losing references", () => {
@@ -16,6 +17,14 @@ test("multiple new drafts keep distinct identities and deletion affects one", ()
   assert.deepEqual(drafts.map(item => item.draftId), ["two", "one"]);
   assert.deepEqual(upsertDraft(drafts, { ...first, title: "已修改" }).map(item => item.title), ["第二篇", "已修改"]);
   assert.deepEqual(removeDraft(drafts, "one"), [second]);
+});
+
+test("opening a blank editor does not create a draft, but writing or changing settings does", () => {
+  const blank = { ...createArticleFromTemplate(), draftId: "new" };
+  assert.equal(hasDraftContent(blank), false);
+  assert.deepEqual(upsertDraft([], blank), []);
+  assert.equal(hasDraftContent({ ...blank, content: "正文" }), true);
+  assert.equal(hasDraftContent({ ...blank, category: "教程" }), true);
 });
 
 test("existing article updates stay under repository and original path", () => {

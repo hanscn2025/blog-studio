@@ -2,7 +2,7 @@ export const DRAFTS_KEY = "hans-article-drafts-v1";
 export const PENDING_KEY = "hans-article-pending-v1";
 
 export function hasDraftContent(article) {
-  return !!article && !article.remote && !!(article.slug || article.content?.trim() || (article.title && article.title !== "未命名文章"));
+  return !!article && !article.remote && !!(article.slug || article.content?.trim() || (article.title && article.title !== "未命名文章") || article.description || article.cover || article.category || article.tags || article.keywords || article.updated || article.channels?.length || article.pendingImages?.length || article.top || article.featured || article.comments === false || article.toc === false || article.video_as_cover === false);
 }
 
 export function upsertDraft(drafts, article) {
