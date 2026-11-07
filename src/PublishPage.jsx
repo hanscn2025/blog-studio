@@ -49,7 +49,7 @@ export function PublishPage({ article, setArticle, setActive, onPublished }) {
   }
 
   return <section className="module-page publish-page">
-    <header className="module-title publish-title"><div><h1>发布确认</h1><p>确认文章与目标仓库，提交后仍需核验博客是否上线。</p></div><button type="button" onClick={() => setActive("写作")}>返回编辑</button></header>
+    <header className="module-title publish-title"><div><h1>提交确认</h1><p>确认文章与目标仓库，提交后仍需核验博客是否上线。</p></div><button type="button" onClick={() => setActive("写作")}>返回编辑</button></header>
     <div className="publish-review">
       <div className="publish-target"><strong>{article.title || "未命名文章"}</strong><small>{article.slug ? `${article.slug}.md` : "尚未填写 Slug"}</small></div>
       <section className="publish-card" aria-labelledby="publish-check-title">
@@ -66,7 +66,7 @@ export function PublishPage({ article, setArticle, setActive, onPublished }) {
         {(connectionError || submitError) && <div className="publish-blocked" role="alert"><WarningCircle/><span>{submitError || connectionError}</span></div>}
         <div className="publish-actions"><button type="button" className="primary" disabled={!canSubmit} onClick={submit}>{busy ? "提交中…" : "确认提交到 GitHub"}</button><small>提交成功不等于博客已上线。</small></div>
       </section>}
-      {published && <section className="publish-card publish-verification" role="status" aria-label="发布状态"><h2>提交结果</h2><div><Check/><span>GitHub 已提交：<a href={`https://github.com/${published.repository}/commit/${published.commit}`} target="_blank" rel="noreferrer">查看提交 {published.repository}/{published.path}</a></span></div>{cleanupError&&<p role="alert">{cleanupError} <button type="button" disabled={busy} onClick={retryCleanup}>{busy?"清理中…":"重试清理"}</button></p>}<div><span className="publish-unknown"/><span>部署构建：待核验</span></div><div><span className="publish-unknown"/><span>博客页面：待核验</span></div><small>只有提交记录已由后台确认；后两项尚无可靠数据源，不能标记为已上线。</small></section>}
+      {published && <section className="publish-card publish-verification" role="status" aria-label="提交状态"><h2>提交结果</h2><div><Check/><span>GitHub 已提交：<a href={`https://github.com/${published.repository}/commit/${published.commit}`} target="_blank" rel="noreferrer">查看提交 {published.repository}/{published.path}</a></span></div>{cleanupError&&<p role="alert">{cleanupError} <button type="button" disabled={busy} onClick={retryCleanup}>{busy?"清理中…":"重试清理"}</button></p>}<div><span className="publish-unknown"/><span>部署构建：待核验</span></div><div><span className="publish-unknown"/><span>博客页面：待核验</span></div><small>只有提交记录已由后台确认；后两项尚无可靠数据源，不能标记为已上线。</small></section>}
     </div>
   </section>;
 }
