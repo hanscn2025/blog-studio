@@ -20,7 +20,9 @@
 .editor-actions button:hover{background:#e8e8e8;color:#111}
 .editor-actions button.active{background:transparent;color:#111;font-weight:600}
 .editor-actions .import-action{background:transparent}
-.editor-actions .cloud-sync-status{max-width:150px;overflow:hidden;color:#777;font-size:11px;text-overflow:ellipsis;white-space:nowrap}
+.editor-actions .cloud-sync-status{flex:0 0 auto;max-width:68px;overflow:hidden;color:#777;font-size:11px;font-weight:600;text-overflow:ellipsis;white-space:nowrap}
+.editor-actions .cloud-sync-status.synced{background:#e7f5e9;color:#278043}
+.editor-actions .cloud-sync-status.error{background:#fff0ed;color:#be4030}
 .editor-actions .upload-action{border:1px solid #d4d4d4;background:#fff}
 .editor-actions .publish-action{min-width:66px;padding:0 12px;background:#292929;color:#fff;font-weight:650}
 .editor-actions .publish-action:hover{background:#111;color:#fff}
@@ -56,6 +58,10 @@
 .article-rendered-preview .wmde-markdown{background:transparent;color:#2b2b2b;font-size:16px;line-height:1.75}
 .article-rendered-preview img{max-width:100%;height:auto}
 .article-rendered-preview{min-height:0;overflow:auto}
+.visual-editor .tiptap{min-height:360px;outline:0;color:#2b2b2b;font-size:16px;line-height:1.75}
+.visual-editor .tiptap p{margin:8px 0}
+.visual-editor .tiptap img{display:block;max-width:100%;height:auto;margin:16px 0}
+.visual-editor .tiptap:focus{outline:0}
 .right-properties{min-width:0;height:100%;overflow:auto;background:#fafafa;border-left:1px solid #e3e3e3}
 .right-properties>header{position:sticky;z-index:2;top:0;display:flex;align-items:center;height:46px;padding:0 14px;background:#fafafa;border-bottom:1px solid #e3e3e3}
 .right-properties>header strong{font-size:13px;font-weight:650}
