@@ -88,6 +88,7 @@ test("existing article updates stay inside the sandbox repository allowlist", as
   const denied = await githubSettingsApi(request("/api/github/update", { path: "source/_posts/hello.md", sha: "a".repeat(40), content: "---\ntitle: Hi\n---\nBody" }), { ...env, PUBLISH_ALLOWED_REPOSITORY: "owner/other" }, github);
   assert.equal(denied.status, 403);
   assert.equal((await githubSettingsApi(request("/api/github/update", { path: "source/_posts/hello.md", sha: "a".repeat(40), content: "---\ntitle: Hi\n---\nBody" }), env, github)).status, 403);
+  assert.equal((await githubSettingsApi(request("/api/github/navigation-save", { sha: "a".repeat(40), channels: [] }), env, github)).status, 403);
 });
 
 test("article deletion is disabled without an explicit sandbox repository allowlist", async () => {

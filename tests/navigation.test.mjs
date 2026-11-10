@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseChannelNavigation, parseHexoMenu, parseHugoTomlMenu, parseHugoYamlMenu, readRepositoryNavigation, renderChannelNavigation, submitNavigationReview } from "../worker/navigation.js";
+import { parseChannelNavigation, parseHexoMenu, parseHugoTomlMenu, parseHugoYamlMenu, readRepositoryNavigation, renderChannelNavigation, saveRepositoryNavigation, submitNavigationReview } from "../worker/navigation.js";
 
 const yaml = `enable: true
 items:
@@ -51,6 +51,27 @@ test("navigation review preserves existing metadata and submits only a developme
   assert.equal(result.url, "https://github.com/owner/dev-blog/pull/1");
   assert.equal(calls.filter(call => call.method !== "GET").length, 3);
   assert.match(Buffer.from(calls.find(call => call.method === "PUT").body.content, "base64").toString(), /key: overseas-card/);
+});
+
+test("saving navigation commits only the bound development file with version checking", async () => {
+  const sha = "a".repeat(40);
+  const original = "items:\n  - key: tools\n    name: 工具\n";
+  const config = { repository: "owner/dev-blog", site: { defaultBranch: "main" }, navigationSource: { path: "source/_data/navigation.yml", format: "channels" } };
+  const calls = [];
+  const request = async (url, options = {}) => {
+    calls.push({ url, method: options.method || "GET", body: options.body && JSON.parse(options.body) });
+    if (options.method === "PUT") return Response.json({ commit: { sha: "b".repeat(40) } });
+    return Response.json({ type: "file", size: original.length, encoding: "base64", sha, content: Buffer.from(original).toString("base64") });
+  };
+  const draft = [{ key: "tools", name: "在线工具", level: 1 }];
+  await assert.rejects(() => saveRepositoryNavigation(config, "token", draft, "c".repeat(40), request), /已被更新/);
+  assert.equal(calls.length, 1);
+  const saved = await saveRepositoryNavigation(config, "token", draft, sha, request);
+  assert.deepEqual(saved, { commit: "b".repeat(40), repository: "owner/dev-blog", path: "source/_data/navigation.yml" });
+  assert.equal(calls.filter(call => call.method === "PUT").length, 1);
+  assert.equal(calls.some(call => call.url.includes("/pulls") || call.url.includes("/git/refs")), false);
+  assert.equal(calls.at(-1).body.branch, "main");
+  assert.equal(calls.at(-1).body.sha, sha);
 });
 
 test("reads only an authorized repository navigation file", async () => {
