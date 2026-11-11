@@ -16,11 +16,15 @@
 .editor-actions .save-state{display:grid;place-items:center;width:26px;height:30px;margin:0;padding:0;color:#6f7772;font-size:10px;white-space:nowrap}
 .editor-actions .save-state svg{width:14px;height:14px}
 .editor-actions .save-state.saving{display:flex;width:auto;padding:0 5px;color:#777}
+.editor-actions .draft-save-status{max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#777;font-size:11px}
+.editor-actions .draft-save-status.error{color:#a43c2e}
+.save-draft-spinner{width:14px;height:14px;border:2px solid #d4d4d4;border-top-color:#555;border-radius:50%;animation:save-draft-spin .7s linear infinite}
+@keyframes save-draft-spin{to{transform:rotate(360deg)}}
+.draft-save-error{padding:9px 18px;background:#fff3f0;color:#a43c2e;font-size:12px;line-height:1.5}
 .editor-actions button{display:flex;align-items:center;justify-content:center;gap:5px;width:auto;min-width:30px;height:30px;padding:0 8px;border:0;border-radius:5px;background:none;color:#555;font-size:11px}
 .editor-actions button:hover{background:#e8e8e8;color:#111}
 .editor-actions button.active{background:transparent;color:#111;font-weight:600}
 .editor-actions .import-action{background:transparent}
-.editor-actions .cloud-sync-status{max-width:150px;overflow:hidden;color:#777;font-size:11px;text-overflow:ellipsis;white-space:nowrap}
 .editor-actions .upload-action{border:1px solid #d4d4d4;background:#fff}
 .editor-actions .publish-action{min-width:66px;padding:0 12px;background:#292929;color:#fff;font-weight:650}
 .editor-actions .publish-action:hover{background:#111;color:#fff}
@@ -56,6 +60,10 @@
 .article-rendered-preview .wmde-markdown{background:transparent;color:#2b2b2b;font-size:16px;line-height:1.75}
 .article-rendered-preview img{max-width:100%;height:auto}
 .article-rendered-preview{min-height:0;overflow:auto}
+.visual-editor .tiptap{min-height:360px;outline:0;color:#2b2b2b;font-size:16px;line-height:1.75}
+.visual-editor .tiptap p{margin:8px 0}
+.visual-editor .tiptap img{display:block;max-width:100%;height:auto;margin:16px 0}
+.visual-editor .tiptap:focus{outline:0}
 .right-properties{min-width:0;height:100%;overflow:auto;background:#fafafa;border-left:1px solid #e3e3e3}
 .right-properties>header{position:sticky;z-index:2;top:0;display:flex;align-items:center;height:46px;padding:0 14px;background:#fafafa;border-bottom:1px solid #e3e3e3}
 .right-properties>header strong{font-size:13px;font-weight:650}

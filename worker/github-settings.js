@@ -1,5 +1,5 @@
 import { createRepositoryArticle, deleteRepositoryArticle, inspectInstalledRepository, installationToken, listArticleHistory, listInstalledRepositories, listRepositoryArticles, readArticleRevision, readRepositoryArticle, updateRepositoryArticle, updateRepositoryArticles } from "./github-app.js";
-import { readRepositoryNavigation, submitNavigationReview } from "./navigation.js";
+import { readRepositoryNavigation, saveRepositoryNavigation, submitNavigationReview } from "./navigation.js";
 import { serializeArticle, validateArticle } from "../src/article-standard.js";
 
 const encoder = new TextEncoder();
@@ -139,6 +139,12 @@ export async function githubSettingsApi(request, env, requestGitHub = fetch) {
       if (!config.site) return json({ error: "请重新识别并绑定博客源码仓库" }, 409);
       const input = await inputJson(request, 30_000);
       return json({ review: await submitNavigationReview(config, await installationToken(config, requestGitHub), input.channels, input.sha, requestGitHub) });
+    }
+    if (url.pathname === "/api/github/navigation-save" && request.method === "POST") {
+      if (!env.PUBLISH_ALLOWED_REPOSITORY || config.repository !== env.PUBLISH_ALLOWED_REPOSITORY) return json({ error: "当前后台不允许向该仓库提交" }, 403);
+      if (!config.site) return json({ error: "请重新识别并绑定博客源码仓库" }, 409);
+      const input = await inputJson(request, 30_000);
+      return json({ saved: await saveRepositoryNavigation(config, await installationToken(config, requestGitHub), input.channels, input.sha, requestGitHub) });
     }
     if (url.pathname.startsWith("/api/github/article") && request.method === "GET") {
       let bound = config;

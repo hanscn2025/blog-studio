@@ -6,7 +6,7 @@ export function DraftBox({ drafts, cloudDrafts = [], cloudError = "", openDraft,
   const rows = drafts.filter(item => `${item.title} ${item.slug}`.toLowerCase().includes(query.toLowerCase())).sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
   const cloudOnly = cloudDrafts.filter(item => !drafts.some(draft => draft.draftId === item.id) && `${item.title} ${item.slug}`.toLowerCase().includes(query.toLowerCase()));
   return <section className="article-manager draft-box">
-    <header><div><h1>草稿箱</h1><p>共 {drafts.length + cloudDrafts.filter(item => !drafts.some(draft => draft.draftId === item.id)).length} 篇 · 自动保存在本机，停止编辑约 3 秒后同步云端；离开前请确认显示「已同步云端」。草稿图片暂存于公开图床。</p></div><div className="article-header-actions"><button className="new-article" onClick={createArticle}><Plus/>新建文章</button></div></header>
+    <header><div><h1>草稿箱</h1><p>共 {drafts.length + cloudDrafts.filter(item => !drafts.some(draft => draft.draftId === item.id)).length} 篇；{import.meta.env.DEV ? '本地演示仅保存到当前浏览器。' : '打开文章后可查看草稿保存状态。'}</p></div><div className="article-header-actions"><button className="new-article" onClick={createArticle}><Plus/>新建文章</button></div></header>
     {import.meta.env.DEV && <p className="demo-banner">本地演示：标有“演示”的文章仅用于查看效果，不会上传到仓库。</p>}
     <div className="article-controls"><div className="article-search"><MagnifyingGlass/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索草稿标题或 Slug"/></div></div>
     {cloudError && <p className="media-feedback" role="status">{cloudError}</p>}

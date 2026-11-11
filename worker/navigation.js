@@ -207,3 +207,23 @@ export async function submitNavigationReview(config, token, draft, expectedSha, 
     return { url: compareUrl, branch: reviewBranch, requiresReview: true, warning: `${error.message}；导航已保存到审核分支，请在打开的页面手动创建 PR` };
   }
 }
+
+export async function saveRepositoryNavigation(config, token, draft, expectedSha, request = fetch) {
+  const path = config.navigationSource?.path;
+  const branch = config.site?.defaultBranch;
+  if (config.navigationSource?.format !== "channels" || !path || !manualPath(path) || !branch) throw new Error("请先确认可编辑的频道导航来源");
+  if (!/^[0-9a-f]{40}$/i.test(expectedSha || "")) throw new Error("导航文件版本无效，请刷新后重试");
+  const source = await readCandidate(config, token, path, request);
+  if (source.sha !== expectedSha) throw new Error("导航文件已被更新，请刷新后重新预览，未覆盖新版本");
+  const content = renderChannelNavigation(source.content, draft);
+  if (content === source.content) throw new Error("导航内容没有变化");
+  const encoded = path.split("/").map(encodeURIComponent).join("/");
+  const response = await request(`https://api.github.com/repos/${config.repository}/contents/${encoded}`, {
+    method: "PUT",
+    headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}`, "User-Agent": "blog-admin", "X-GitHub-Api-Version": "2026-03-10" },
+    body: JSON.stringify({ message: "Update blog navigation", content: Buffer.from(content).toString("base64"), sha: expectedSha, branch }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(`导航保存到开发仓失败 (${response.status})：${String(result.message || "请检查仓库写入权限和分支保护规则").slice(0, 140)}`);
+  return { commit: result.commit?.sha || "", repository: config.repository, path };
+}
